@@ -5,15 +5,24 @@
 #include <ArduinoWebsockets.h>
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
+#include <SPI.h>
+#include <MFRC522.h>
 
+// Define pins temperature sensor
 #define DHTTYPE DHT11
 #define dht_dpin 0
 DHT dht(dht_dpin, DHTTYPE);
 
-#define RED_LED 14    // D5
-#define GREEN_LED 12  // D6
-#define YELLOW_LED 13 // D7
+// Define pins RFID
+#define RST_PIN D3
+#define SS_PIN D4
 
+MFRC522 reader(SS_PIN, RST_PIN);
+
+const int DELAY_RFID_LECTURE = 5000;
+long long int lastReadRFID = 0;
+
+// Time to send general data to server
 const long int SEND_TIME_INTERVAL = 30000;
 unsigned long int lastTime = 0;
 
@@ -57,9 +66,13 @@ void onMessageCallback(WebsocketsMessage message)
         Serial.println("Error: no action was detected.");
         Serial.println("Aborted action");
     }
-    else if (action == "getHumidity")
+    else if (action == "getTemperature")
     {
-        wsClient.sendResponse(getHumidity(), "humidity");
+        wsClient.sendResponse(getTemp(), "temperature");
+    }
+    else if (action == "getLight")
+    {
+        wsClient.sendResponse(getLight(), "light");
     }
     else
     {
@@ -81,6 +94,10 @@ void setup()
 
     dht.begin();
     Serial.println("Humidity and temperature sensor initialized.");
+
+    SPI.begin();
+    reader.PCD_Init(); // Initialize MFRC522
+    Serial.println("RFID initialized");
 
     // Connect to wifi
     WiFi.begin(config::ssid, config::password);
@@ -110,9 +127,66 @@ float getHumidity()
     return dht.readHumidity();
 }
 
+// TODO: implement
 float getTemp()
 {
-    return dht.readTemperature();
+    return 1;
+    // return dht.readTemperature();
+}
+
+// TODO: implement
+float getLight()
+{
+    return 1;
+}
+
+// Send rfid lectures to server.
+void checkRFID()
+{
+    // Check RFID lectures
+    if (!reader.PICC_IsNewCardPresent())
+    {
+        return;
+    }
+
+    // Check if lecture was successful, else exit loop
+    if (!reader.PICC_ReadCardSerial())
+    {
+        return;
+    }
+
+    // If a RFID lecture has been detected recently, skip detection.
+    if (millis() - lastReadRFID < DELAY_RFID_LECTURE)
+    {
+        return;
+    }
+
+    lastReadRFID = millis();
+
+    Serial.println("RFID readed card successfuly");
+
+    String reading = "";
+    for (int x = 0; x < reader.uid.size; x++)
+    {
+        // If it is less than 10, we add zero
+        if (reader.uid.uidByte[x] < 0x10)
+        {
+            reading += "0";
+        }
+        // Convert lecture from byte to hexadecimal
+        reading += String(reader.uid.uidByte[x], HEX);
+
+        // Separate bytes with dashes.
+        if (x + 1 != reader.uid.size)
+        {
+            reading += "-";
+        }
+    }
+    // Make string uppercase (for formatting)
+    reading.toUpperCase();
+
+    // Send lecture to server
+    wsClient.sendResponse(reading, "RFID");
 }
 
 void loop()
@@ -124,6 +198,10 @@ void loop()
     if (millis() - lastTime > SEND_TIME_INTERVAL)
     {
         lastTime = millis();
-        // wsClient.sendResponse(getTemp(), "temperature");
+        wsClient.sendResponse(getLight(), "light");
+        wsClient.sendResponse(getTemp(), "temperature");
+        wsClient.sendResponse("TEST-ID", "RFID");
     }
+
+    checkRFID();
 }
