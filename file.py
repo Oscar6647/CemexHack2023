@@ -5,11 +5,12 @@
 
 
 import pandas as pd
+import json
 import numpy as np
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 from math import radians, sin, cos, sqrt, atan2
-from flask import Flask
+from flask import Flask, request
 app = Flask(__name__)
 
 
@@ -181,13 +182,13 @@ def main():
             route_array.append(locations[node])
         solution_array.append(route_array)
     print("Solution Array:", solution_array)
-
-    @app.route('/solution', methods=['POST'])
-    def solution():
-        return str(solution_array)
     
-    #with get request latitude and longitude 
-    
+#with get request latitude and longitude 
+@app.route('/solution', methods=['POST'])
+def solution():
+    obj = json.loads(request.data) # Transform incoming string into an object
+    # TODO: add call to function, given request.data input
+    return str(request.data)  
     
 if __name__ == "__main__":
     main()
