@@ -209,8 +209,8 @@ def solution():
     try:
         obj = json.loads(request.data) 
 
-        solution_array = main()
-        max_route_distance, litros_total, costo_total = solucion()
+        solution_array, max_route_distance, litros_total, costo_total = main()
+        
 
         # Assuming you have access to the 'all_routes', 'max_route_distance', 'litros_total', and 'costo_total' variables
         response_data = {
