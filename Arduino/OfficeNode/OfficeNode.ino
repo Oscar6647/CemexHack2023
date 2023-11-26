@@ -13,6 +13,9 @@
 #define dht_dpin 0
 DHT dht(dht_dpin, DHTTYPE);
 
+const int ldrPin = A0; // LDR Pin
+const int pirPin = 5;  // LDR Pin
+
 // Define pins RFID
 #define RST_PIN D3
 #define SS_PIN D4
@@ -20,7 +23,10 @@ DHT dht(dht_dpin, DHTTYPE);
 MFRC522 reader(SS_PIN, RST_PIN);
 
 const int DELAY_RFID_LECTURE = 5000;
+const int DELAY_ALARM_LECTURE = 5000;
 long long int lastReadRFID = 0;
+
+long long int lastAlarm = 0;
 
 // Time to send general data to server
 const long int SEND_TIME_INTERVAL = 30000;
@@ -30,7 +36,7 @@ float upperBound = 24.60;
 float lowerBound = 18.0;
 
 using namespace websockets;
-Websockets wsClient(config::websockets_connection_string);
+Websockets wsClient(config::websockets_connection_string, true);
 
 // Execute when recieving a message
 void onMessageCallback(WebsocketsMessage message)
@@ -99,6 +105,8 @@ void setup()
     reader.PCD_Init(); // Initialize MFRC522
     Serial.println("RFID initialized");
 
+    pinMode(pirPin, INPUT); // declare sensor as input
+
     // Connect to wifi
     WiFi.begin(config::ssid, config::password);
 
@@ -127,17 +135,14 @@ float getHumidity()
     return dht.readHumidity();
 }
 
-// TODO: implement
 float getTemp()
 {
-    return 1;
-    // return dht.readTemperature();
+    return dht.readTemperature();
 }
 
-// TODO: implement
-float getLight()
+int getLight()
 {
-    return 1;
+    return analogRead(ldrPin);
 }
 
 // Send rfid lectures to server.
@@ -188,11 +193,52 @@ void checkRFID()
     // Send lecture to server
     wsClient.sendResponse(reading, "RFID");
 }
+// Send rfid lectures to server.
+void checkPIR()
+{
+
+    // If a RFID lecture has been detected recently, skip detection.
+    if (millis() - lastAlarm < DELAY_ALARM_LECTURE)
+    {
+        return;
+    }
+
+    long state = digitalRead(pirPin);
+
+    if (state == HIGH)
+    {
+        wsClient.sendResponse("triggered", "movement");
+        lastAlarm = millis();
+    }
+}
+void logData()
+{
+    Serial.print("Light: ");
+    Serial.println(getLight());
+
+    Serial.print("Temperature: ");
+    Serial.println(getTemp());
+
+    Serial.print("Movement: ");
+    long state = digitalRead(pirPin);
+
+    if (state == HIGH)
+    {
+        Serial.println("motion detected");
+    }
+    else
+    {
+        Serial.println("motion not detected");
+    }
+}
 
 void loop()
 {
     // Listen for events
     wsClient.poll();
+
+    delay(200);
+    //    logData();
 
     // Example of sending data every specific time
     if (millis() - lastTime > SEND_TIME_INTERVAL)
@@ -204,4 +250,5 @@ void loop()
     }
 
     checkRFID();
+    checkPIR();
 }
