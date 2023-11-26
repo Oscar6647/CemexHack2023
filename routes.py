@@ -4,8 +4,6 @@
 import json
 from flask import Flask, request
 app = Flask(__name__)
-import pandas as pd
-import numpy as np
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 from math import radians, sin, cos, sqrt, atan2
@@ -56,7 +54,7 @@ def create_data_model(locations, vehicles):
 
 
 def solucion(data, manager, routing, solution):
-    """Returns the solution as well as printing it on console."""
+    """Returns the solution as well as printing it on the console."""
     max_route_distance = 0
     all_routes = []
     litros_total = 0
@@ -66,9 +64,10 @@ def solucion(data, manager, routing, solution):
         index = routing.Start(vehicle_id)
         route_nodes = []  # List to store nodes visited by the current vehicle
         route_distance = 0
+        route_actual = 0
         litros_gas = 0
+        litros_actual = 0
         costo = 0
-
 
         while not routing.IsEnd(index):
             node = manager.IndexToNode(index)
@@ -77,13 +76,13 @@ def solucion(data, manager, routing, solution):
             previous_index = index
             index = solution.Value(routing.NextVar(index))
             route_distance += (routing.GetArcCostForVehicle(previous_index, index, vehicle_id))
-            litros_gas += round(route_distance * 0.35,1) #se gastan 35 litros por cada 100 km
-            costo += round(litros_gas * 22.76,1)
-
+            route_actual = (routing.GetArcCostForVehicle(previous_index, index, vehicle_id))
+            litros_gas += round(route_actual * 0.35,1)  # se gastan 35 litros por cada 100 km
+            litros_actual = round(route_actual * 0.35,1)
+            costo += round(litros_actual * 22.76,1)
 
         node = manager.IndexToNode(index)
         route_nodes.append(node)
-        
 
         # Add the current route to the list of all routes
         all_routes.append(route_nodes)
@@ -96,8 +95,8 @@ def solucion(data, manager, routing, solution):
         print(f"Costo: ${costo}\n")
 
         max_route_distance = max(route_distance, max_route_distance)
-        litros_total += round(litros_gas,2)
-        costo_total += round(costo,2)
+        litros_total += round(litros_gas, 2)
+        costo_total += round(costo, 2)
 
     print("----------------------------------------------")
     print("TOTALES:")
@@ -177,14 +176,35 @@ def invoke_model(num_vehicles, locations):
 
         return solution_array, max_route_distance, litros_gas, costo_total
 
-    
+
+"""
+Body format:
+{
+    "positions": [  {"lat": 16, "lng": 20}, {"lat": 14, "lng": 20}, {"lat": 10, "lng": 20}]
+}
+"""
 @app.route('/solution', methods=['POST'])
 def solution():
     try:
-        obj = json.loads(request.data)
+        obj = json.loads(request.data) 
+        # print("OBJECT:")
+        # print(obj)
+        positions = obj['positions']
+        print(positions)
+
+        # locations = [(10, 20), (11, 21), (11.5, 22)]
+        locations = []
         num_vehicles = 2
-        # locations = [(10, 20), (10, 31), (30, 40)]
-        locations = [(10, 20), (11, 21), (11.5, 22)]
+        
+        for pos in positions:
+            print("pos:", pos)
+            if ('lat' in pos and 'lng' in pos):
+                locations.append((pos['lat'], pos['lng']))
+            else:
+                print("WARNING: missing property in location")
+        
+        if (len(locations) < 2):
+            return "Error: not enough location."
         
         result = invoke_model(num_vehicles, locations)
         print(result)
