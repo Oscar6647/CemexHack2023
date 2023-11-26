@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[80]:
-
 import json
 from flask import Flask, request
 app = Flask(__name__)
@@ -11,9 +9,6 @@ import numpy as np
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 from math import radians, sin, cos, sqrt, atan2
-
-
-# In[81]:
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -36,9 +31,6 @@ def haversine(lat1, lon1, lat2, lon2):
     return distance
 
 
-# In[82]:
-
-
 def create_distance_matrix(locations):
     num_locations = len(locations)
     distance_matrix = [[0] * num_locations for _ in range(num_locations)]
@@ -54,9 +46,6 @@ def create_distance_matrix(locations):
     return distance_matrix
 
 
-# In[83]:
-
-
 def create_data_model(locations, vehicles):
     """Stores the data for the problem."""
     data = {}
@@ -64,9 +53,6 @@ def create_data_model(locations, vehicles):
     data["num_vehicles"] = vehicles
     data["depot"] = 0
     return data
-
-
-# In[84]:
 
 
 def solucion(data, manager, routing, solution):
@@ -121,21 +107,9 @@ def solucion(data, manager, routing, solution):
 
     return all_routes, max_route_distance, litros_gas, costo_total
 
-
-# In[85]:
-
-
-def main():
+# locations: array of tupples, indicating (lat, lon)
+def invoke_model(num_vehicles, locations):
     """Entry point of the program."""
-    # Get input for the number of places and their coordinates
-    num_places = int(input("Ingresa el numero de lugares: "))
-    num_vehicles = int(input("Ingresa el numero de vehiculos: "))
-    locations = []
-
-    for i in range(num_places):
-        lat = float(input(f"Latitude  {i + 1}: "))
-        lon = float(input(f"Longitude {i + 1}: "))
-        locations.append((lat, lon))
 
     # Instantiate the data problem.
     data = create_data_model(locations, num_vehicles)
@@ -184,47 +158,56 @@ def main():
 
     # Print solution on console and return all_routes.
     if solution:
-        all_routes = solucion(data, manager, routing, solution)
+        all_routes, max_route_distance, litros_gas, costo_total = solucion(data, manager, routing, solution)
         # Now you can use the 'all_routes' variable in the rest of your code.
         print("All Routes:", all_routes)
     else:
-        print("No solution found !")
+        return "No solution"
 
 
-    solution_array = []
-    for route in all_routes:
-        route_array = []
-        for node in route:
-            route_array.append(locations[node])
-        solution_array.append(route_array)
-    print("Solution Array:", solution_array)
+    if solution:
+        solution_array = []
+        for route in all_routes:
+            route_array = []
+            for node in route:
+                route_array.append(locations[node])
+            solution_array.append(route_array)
 
-    return(solution_array)
+        print("Solution Array:", solution_array)
 
- 
+        return solution_array, max_route_distance, litros_gas, costo_total
 
     
 @app.route('/solution', methods=['POST'])
 def solution():
     try:
         obj = json.loads(request.data) 
-
-        solution_array, max_route_distance, litros_total, costo_total = main()
+        num_vehicles = 2
+        # locations = [(10, 20), (10, 31), (30, 40)]
+        locations = [(10, 20), (11, 21), (11.5, 22)]
         
+        result = invoke_model(num_vehicles, locations)
+        print(result)
+        print(type(result))
 
-        # Assuming you have access to the 'all_routes', 'max_route_distance', 'litros_total', and 'costo_total' variables
-        response_data = {
-            "solution_array": solution_array,
-            "max_route_distance": max_route_distance,
-            "litros_total": litros_total,
-            "costo_total": costo_total
-        }
+        if (isinstance(result, str)):
+            return json.dumps(result)
+        elif (isinstance(result, tuple)):
+            
+            solution_array, max_route_distance, litros_total, costo_total = result
+            
+            response_data = {
+                "solution_array": solution_array,
+                "max_route_distance": max_route_distance,
+                "litros_total": litros_total,
+                "costo_total": costo_total
+            }
+            return json.dumps(response_data)
+        else:
+            return "Error: unhandled result of invoking model."
 
-        return json.dumps(response_data)
+        
     except json.JSONDecodeError:
         return json.dumps({"error": "Invalid JSON data"}), 400, {'Content-Type': 'application/json'}
 
-
-if __name__ == "__main__":
-    main()
 
